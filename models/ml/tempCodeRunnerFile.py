@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 
-from models.model.resume_quality_score import compute_resume_quality_score
+from model.resume_quality_score import compute_resume_quality_score
 
 
 

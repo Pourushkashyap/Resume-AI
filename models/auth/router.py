@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from models.auth.schemas import SignupSchema, LoginSchema
-from models.auth.utils import (
+from auth.schemas import SignupSchema, LoginSchema
+from auth.utils import (
     users_collection,
     hash_password,
     verify_password,

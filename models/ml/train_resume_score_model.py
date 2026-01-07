@@ -8,7 +8,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 
 # ✅ CORRECT IMPORT (works when run as module)
-from models.model.resume_quality_score import compute_resume_quality_score
+from model.resume_quality_score import compute_resume_quality_score
 
 
 # =================================================

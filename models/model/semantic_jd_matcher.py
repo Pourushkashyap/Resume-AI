@@ -6,7 +6,7 @@ import os
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from fastapi import Depends
-from models.auth.dependencies import get_current_user
+from auth.dependencies import get_current_user
 
 
 

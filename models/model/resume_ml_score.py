@@ -5,7 +5,7 @@ import re
 import os
 import tempfile
 from fastapi import Depends
-from models.auth.dependencies import get_current_user
+from auth.dependencies import get_current_user
 
 
 router = APIRouter(
