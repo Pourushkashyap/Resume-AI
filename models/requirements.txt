@@ -5,6 +5,9 @@ pymongo
 passlib[bcrypt]
 python-jose
 pdfplumber
-sentence-transformers
+
+# ML
 scikit-learn
 joblib
+torch==2.1.2+cpu
+sentence-transformers==2.2.2
