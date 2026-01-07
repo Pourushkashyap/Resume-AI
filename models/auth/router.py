@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from auth.schemas import SignupSchema, LoginSchema
 from auth.utils import (
     users_collection,
@@ -13,10 +13,13 @@ router = APIRouter(
 )
 
 # ---------------- SIGNUP ----------------
-@router.post("/signup")
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(data: SignupSchema):
     if users_collection.find_one({"email": data.email}):
-        raise HTTPException(400, "User already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already exists"
+        )
 
     users_collection.insert_one({
         "name": data.name,
@@ -30,16 +33,18 @@ def signup(data: SignupSchema):
 @router.post("/login")
 def login(data: LoginSchema):
     user = users_collection.find_one({"email": data.email})
-    if not user:
-        raise HTTPException(401, "Invalid email or password")
 
-    if not verify_password(data.password, user["hashed_password"]):
-        raise HTTPException(401, "Invalid email or password")
+    if not user or not verify_password(data.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
 
     token = create_access_token({"sub": user["email"]})
 
     return {
         "access_token": token,
+        "token_type": "bearer",
         "user": {
             "name": user["name"],
             "email": user["email"]

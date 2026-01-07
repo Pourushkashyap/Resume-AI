@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
-
-
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 
@@ -14,10 +12,6 @@ load_dotenv(ENV_PATH)
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
-
-print("ENV PATH =", ENV_PATH)
-print("SECRET_KEY =", SECRET_KEY)
-print("MONGO_URI =", MONGO_URI)
 
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY not found in .env")
@@ -27,7 +21,7 @@ if not MONGO_URI:
 
 # ---------------- CONFIG ----------------
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -37,14 +31,14 @@ db = client["resume_ai"]
 users_collection = db["users"]
 
 # ---------------- PASSWORD ----------------
-def hash_password(password: str):
+def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
-def verify_password(password: str, hashed: str):
+def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
 # ---------------- JWT ----------------
-def create_access_token(data: dict):
+def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})

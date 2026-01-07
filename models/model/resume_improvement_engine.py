@@ -1,83 +1,85 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 import pdfplumber
 import re
 import tempfile
 import os
-from fastapi import Depends
 from auth.dependencies import get_current_user
-
 
 router = APIRouter(
     prefix="/improvement",
     tags=["Resume Improvement"]
 )
 
+# =================================================
+# CONSTANTS
+# =================================================
+
+MAX_PAGES = 5  # ✅ LIMIT PDF PAGES (huge memory saver)
 
 REQUIRED_SECTIONS = {
-    "summary": ["summary", "profile", "objective"],
-    "skills": ["skills", "technical skills"],
-    "projects": ["projects", "project"],
-    "experience": ["experience", "work experience", "internship"],
-    "education": ["education", "academic"]
+    "summary": ("summary", "profile", "objective"),
+    "skills": ("skills", "technical skills"),
+    "projects": ("projects", "project"),
+    "experience": ("experience", "work experience", "internship"),
+    "education": ("education", "academic")
 }
 
-WEAK_PHRASES = [
-    "worked on",
-    "responsible for",
-    "helped with",
-    "good knowledge",
+WEAK_PHRASES = (
+    "worked on", "responsible for",
+    "helped with", "good knowledge",
     "basic knowledge"
-]
+)
 
-ACTION_VERBS = [
+ACTION_VERBS = (
     "built", "developed", "designed", "implemented",
     "optimized", "created", "engineered",
     "integrated", "deployed"
-]
+)
 
-SKILL_VOCAB = [
+SKILL_VOCAB = (
     "react", "javascript", "node", "nodejs", "express",
     "mongodb", "python", "machine learning", "sql",
     "html", "css", "angular", "docker", "aws",
     "rest", "api", "socket", "firebase"
-]
+)
 
 STACK_MAP = {
-    "mern": ["mongodb", "express", "react", "node"],
-    "mean": ["mongodb", "express", "angular", "node"]
+    "mern": ("mongodb", "express", "react", "node"),
+    "mean": ("mongodb", "express", "angular", "node")
 }
 
+BULLET_REGEX = re.compile(r"(?:•|-|–|\*|\d+\.)\s*(.+)")
+YEAR_REGEX = re.compile(r"(\d+)\+?\s*years?")
+EXP_REGEX = re.compile(r"(\d+)\s*(?:years?|months?)")
+
 # =================================================
-# UTILS
+# UTILS (OPTIMIZED)
 # =================================================
 
 def normalize_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower()).strip()
+    return " ".join(text.lower().split())
 
 
 def extract_text_from_pdf(pdf_path: str) -> str:
-    text = ""
+    texts = []
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                text += t + "\n"
-    return text
+        for page in pdf.pages[:MAX_PAGES]:  # ✅ LIMIT PAGES
+            page_text = page.extract_text()
+            if page_text:
+                texts.append(page_text)
+    return "\n".join(texts)
 
 
 def extract_bullets(text: str):
-    return re.findall(r"(?:•|-|–|\*|\d+\.)\s*(.+)", text)
+    return BULLET_REGEX.findall(text)
 
 
 # =================================================
-# SKILL GAP LOGIC
+# SKILL GAP
 # =================================================
 
 def extract_skills(text: str):
-    skills = set()
-    for s in SKILL_VOCAB:
-        if s in text:
-            skills.add(s)
+    skills = set(s for s in SKILL_VOCAB if s in text)
     for stack, expanded in STACK_MAP.items():
         if stack in text:
             skills.update(expanded)
@@ -89,39 +91,33 @@ def compute_missing_skills(resume_text: str, jd_text: str):
 
 
 # =================================================
-# EXPERIENCE LOGIC (IMPROVED)
+# EXPERIENCE
 # =================================================
 
 def extract_experience_requirement(jd_text):
-    match = re.search(r"(\d+)\+?\s*years?", jd_text)
-    years = int(match.group(1)) if match else None
-    return years
+    match = YEAR_REGEX.search(jd_text)
+    return int(match.group(1)) if match else None
 
 
 def resume_experience_years(resume_text):
-    matches = re.findall(r"(\d+)\s*(?:years?|months?)", resume_text)
-    if not matches:
-        return 0
-    return max(int(m) for m in matches)
+    matches = EXP_REGEX.findall(resume_text)
+    return max(map(int, matches)) if matches else 0
 
 
 def experience_requirement_suggestions(resume_text, jd_text):
-    suggestions = []
     jd_years = extract_experience_requirement(jd_text)
     resume_years = resume_experience_years(resume_text)
 
     if jd_years and resume_years < jd_years:
-        suggestions.append(
-            f"The job description requires {jd_years}+ years of experience, "
-            f"but your resume does not clearly demonstrate this. "
-            f"Add internship, freelance, or professional experience with duration."
-        )
-
-    return suggestions
+        return [
+            f"The job requires {jd_years}+ years of experience. "
+            f"Add internships, freelance, or professional experience with duration."
+        ]
+    return []
 
 
 # =================================================
-# IMPROVEMENT MODULES
+# IMPROVEMENTS
 # =================================================
 
 def missing_section_suggestions(text):
@@ -133,25 +129,19 @@ def missing_section_suggestions(text):
 
 
 def soft_section_suggestions(text):
-    tips = []
     if "summary" in text:
         summary_block = text.split("summary", 1)[1][:300]
         if len(summary_block.split()) < 40:
-            tips.append(
-                "Expand your summary to 2–3 lines highlighting skills and experience."
-            )
-    return tips
+            return ["Expand your summary to 2–3 lines highlighting skills and experience."]
+    return []
 
 
 def skill_gap_suggestions(missing_skills):
-    if not missing_skills:
-        return [
-            "Strengthen your profile by adding measurable impact to your projects."
-        ]
-    return [
-        f"Add {skill} by mentioning it in a project or hands-on experience."
-        for skill in missing_skills
-    ]
+    return (
+        [f"Add {skill} by mentioning it in a project or hands-on experience."]
+        if missing_skills else
+        ["Strengthen your profile by adding measurable impact to your projects."]
+    )
 
 
 def weak_bullet_suggestions(original_text):
@@ -159,39 +149,32 @@ def weak_bullet_suggestions(original_text):
     suggestions = []
 
     for bullet in bullets:
-        if any(p in bullet.lower() for p in WEAK_PHRASES):
+        low = bullet.lower()
+        if any(p in low for p in WEAK_PHRASES):
             suggestions.append({
                 "original": bullet,
                 "suggested": (
-                    "Rewrite with action verb + technology + outcome. "
+                    "Use action verb + technology + result. "
                     "Example: 'Developed REST APIs using Node.js and Express.js.'"
                 )
             })
 
-    if bullets and not suggestions:
-        suggestions.append({
-            "original": "Your bullets are clear",
-            "suggested": "Add numbers (users, speed, scale) to increase impact."
-        })
-
-    return suggestions
+    return suggestions or [{
+        "original": "Bullets are fine",
+        "suggested": "Add numbers (users, performance, scale) for more impact."
+    }]
 
 
 def grammar_suggestions(text):
-    tips = [
-        f"Replace weak phrase '{p}' with strong action verbs."
-        for p in WEAK_PHRASES if p in text
-    ]
-    if not tips:
-        tips.append("Grammar is good. Minor refinements can improve clarity.")
-    return tips
+    tips = [f"Replace weak phrase '{p}' with strong action verbs." for p in WEAK_PHRASES if p in text]
+    return tips or ["Grammar is good. Minor refinements can improve clarity."]
 
 
 def skill_section_suggestions(text):
     if "skills" not in text:
         return []
     block = text.split("skills", 1)[1][:400]
-    skills = [s.strip() for s in re.split(r",|\n", block) if s.strip()]
+    skills = [s for s in re.split(r",|\n", block) if s.strip()]
 
     if len(skills) < 5:
         return ["Add more relevant technical skills."]
@@ -214,28 +197,28 @@ def project_section_suggestions(text):
 # =================================================
 
 def generate_resume_improvements(resume_text, jd_text):
-    clean_resume = normalize_text(resume_text)
-    clean_jd = normalize_text(jd_text)
+    resume_clean = normalize_text(resume_text)
+    jd_clean = normalize_text(jd_text)
 
-    missing_skills = compute_missing_skills(clean_resume, clean_jd)
+    missing_skills = compute_missing_skills(resume_clean, jd_clean)
 
     return {
         "critical_improvements": (
-            missing_section_suggestions(clean_resume)
-            + soft_section_suggestions(clean_resume)
-            + experience_requirement_suggestions(clean_resume, clean_jd)
+            missing_section_suggestions(resume_clean)
+            + soft_section_suggestions(resume_clean)
+            + experience_requirement_suggestions(resume_clean, jd_clean)
         ),
         "skill_gap_suggestions": skill_gap_suggestions(missing_skills),
         "bullet_point_improvements": weak_bullet_suggestions(resume_text),
-        "grammar_tips": grammar_suggestions(clean_resume),
-        "skill_section_tips": skill_section_suggestions(clean_resume),
-        "project_section_tips": project_section_suggestions(clean_resume),
+        "grammar_tips": grammar_suggestions(resume_clean),
+        "skill_section_tips": skill_section_suggestions(resume_clean),
+        "project_section_tips": project_section_suggestions(resume_clean),
         "detected_missing_skills": missing_skills
     }
 
 
 # =================================================
-# API ENDPOINT
+# API
 # =================================================
 
 @router.post("/suggestions")
@@ -244,7 +227,7 @@ async def resume_improvements(
     job_description: str = Form(...),
     current_user: str = Depends(get_current_user)
 ):
-    if not resume.filename.endswith(".pdf"):
+    if not resume.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF resumes are supported")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:

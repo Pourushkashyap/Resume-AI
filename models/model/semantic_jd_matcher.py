@@ -1,37 +1,50 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 import pdfplumber
 import tempfile
 import os
-
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from fastapi import Depends
 from auth.dependencies import get_current_user
-
-
 
 app = FastAPI(title="Semantic ATS Matcher (Model 6)")
 
+# =================================================
+# LIMITS (VERY IMPORTANT FOR RENDER)
+# =================================================
+MAX_PAGES = 4
+MAX_TEXT_CHARS = 4000   # transformer safe limit
 
-
+# =================================================
+# LOAD MODEL ONCE
+# =================================================
 semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-
-
+# =================================================
+# UTILS
+# =================================================
 def extract_text_from_pdf(pdf_path: str) -> str:
-    text = ""
+    texts = []
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-    return text.strip()
+        for page in pdf.pages[:MAX_PAGES]:
+            t = page.extract_text()
+            if t:
+                texts.append(t)
 
+    text = "\n".join(texts)
+    return text[:MAX_TEXT_CHARS].strip()
 
 
 def semantic_resume_jd_match(resume_text: str, jd_text: str):
-    resume_embedding = semantic_model.encode(resume_text)
-    jd_embedding = semantic_model.encode(jd_text)
+    # truncate JD also (very important)
+    resume_text = resume_text[:MAX_TEXT_CHARS]
+    jd_text = jd_text[:MAX_TEXT_CHARS]
+
+    resume_embedding = semantic_model.encode(
+        resume_text, normalize_embeddings=True
+    )
+    jd_embedding = semantic_model.encode(
+        jd_text, normalize_embeddings=True
+    )
 
     similarity = cosine_similarity(
         [resume_embedding], [jd_embedding]
@@ -39,43 +52,39 @@ def semantic_resume_jd_match(resume_text: str, jd_text: str):
 
     score = round(similarity * 100, 2)
 
-    if score >= 75:
-        verdict = "STRONG MATCH"
-    elif score >= 50:
-        verdict = "MODERATE MATCH"
-    else:
-        verdict = "WEAK MATCH"
+    verdict = (
+        "STRONG MATCH" if score >= 75
+        else "MODERATE MATCH" if score >= 50
+        else "WEAK MATCH"
+    )
 
     return {
         "semantic_match_score": score,
         "verdict": verdict
     }
 
-
-
+# =================================================
+# API
+# =================================================
 @app.post("/semantic-match")
 async def semantic_match_api(
-     resume: UploadFile = File(...),
-     job_description: str = Form(...),
-     current_user: str = Depends(get_current_user)
+    resume: UploadFile = File(...),
+    job_description: str = Form(...),
+    current_user: str = Depends(get_current_user)
 ):
-    # Validate file
-    if not resume.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF resumes allowed")
+    if not resume.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF resumes allowed")
 
-    # Save PDF temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(await resume.read())
-        tmp_path = tmp.name
+        path = tmp.name
 
     try:
-        # Extract resume text
-        resume_text = extract_text_from_pdf(tmp_path)
+        resume_text = extract_text_from_pdf(path)
 
         if not resume_text:
-            raise HTTPException(status_code=400, detail="Could not extract resume text")
+            raise HTTPException(400, "Could not extract resume text")
 
-        # Semantic match
         result = semantic_resume_jd_match(resume_text, job_description)
 
         return {
@@ -85,4 +94,4 @@ async def semantic_match_api(
         }
 
     finally:
-        os.remove(tmp_path)
+        os.remove(path)
