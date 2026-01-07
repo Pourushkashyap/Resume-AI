@@ -3,7 +3,7 @@ import pdfplumber
 import re
 import tempfile
 import os
-from auth.dependencies import get_current_user
+from models.auth.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/improvement",
@@ -137,11 +137,15 @@ def soft_section_suggestions(text):
 
 
 def skill_gap_suggestions(missing_skills):
-    return (
-        [f"Add {skill} by mentioning it in a project or hands-on experience."]
-        if missing_skills else
-        ["Strengthen your profile by adding measurable impact to your projects."]
-    )
+    if not missing_skills:
+        return [
+            "Strengthen your profile by adding measurable impact to your projects."
+        ]
+
+    return [
+        f"Add {skill} by mentioning it in a project or hands-on experience."
+        for skill in missing_skills
+    ]
 
 
 def weak_bullet_suggestions(original_text):

@@ -1,6 +1,6 @@
 import joblib
 from ml.train_resume_score_model import extract_features
-from model.resume_quality_score import compute_resume_quality_score
+from models.model.resume_quality_score import compute_resume_quality_score
 
 model = joblib.load("models/resume_score_model.pkl")
 

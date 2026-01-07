@@ -4,7 +4,7 @@ import tempfile
 import os
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from auth.dependencies import get_current_user
+from models.auth.dependencies import get_current_user
 
 app = FastAPI(title="Semantic ATS Matcher (Model 6)")
 

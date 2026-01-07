@@ -4,7 +4,7 @@ import joblib
 import re
 import os
 import tempfile
-from auth.dependencies import get_current_user
+from models.auth.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/ml-score",
