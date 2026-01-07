@@ -1,13 +1,14 @@
 fastapi
 uvicorn
+
 python-dotenv
 pymongo
 passlib[bcrypt]
 python-jose
 pdfplumber
 
-# ML
 scikit-learn
 joblib
-torch==2.1.2+cpu
+
+torch==2.1.2
 sentence-transformers==2.2.2
