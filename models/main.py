@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from auth.router import router as auth_router
-from model.semantic_resume_jb_matcher import router as semantic_router
-from model.resume_quality_score import router as quality_router
-from model.resume_improvement_engine import router as improvement_router
-from model.resume_ml_score import router as ml_score_router
+from models.auth.router import router as auth_router
+from models.model.semantic_resume_jb_matcher import router as semantic_router
+from models.model.resume_quality_score import router as quality_router
+from models.model.resume_improvement_engine import router as improvement_router
+from models.model.resume_ml_score import router as ml_score_router
 
 app = FastAPI(title="AI Resume ATS System")
 
